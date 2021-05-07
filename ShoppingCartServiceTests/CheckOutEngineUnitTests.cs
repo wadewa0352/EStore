@@ -5,13 +5,31 @@ using ShoppingCartService.DataAccess.Entities;
 using ShoppingCartService.Mapping;
 using ShoppingCartService.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace ShoppingCartServiceTests
 {
+
     public class CheckOutEngineUnitTests
     {
         private readonly IMapper _mapper;
+
+        public static List<object[]> TestData()
+        {
+            return new List<object[]>
+            {
+                new object[] { CustomerType.Standard, new List<Item> { new Item { ProductId = "1", Price = 2, Quantity = 2 } }},
+                new object[] { CustomerType.Standard, new List<Item> { 
+                    new Item { ProductId = "1", Price = 2, Quantity = 2 },
+                    new Item { ProductId = "2", Price = 2, Quantity = 2 } }},
+                new object[] { CustomerType.Premium, new List<Item> { new Item { ProductId = "1", Price = 2, Quantity = 2 } }},
+                new object[] { CustomerType.Premium, new List<Item> {
+                    new Item { ProductId = "1", Price = 2, Quantity = 2 },
+                    new Item { ProductId = "2", Price = 2, Quantity = 2 } }},
+            };            
+        }
 
         public CheckOutEngineUnitTests()
         {
@@ -19,180 +37,74 @@ namespace ShoppingCartServiceTests
             _mapper = config.CreateMapper();
         }
 
-        [Fact]
-        public void CalculateTotals_StandardCustomerDiscount_IsZero()
+        [Theory]
+        [InlineData(CustomerType.Standard, 0)]
+        [InlineData(CustomerType.Premium, 10)]
+        public void CalculateTotals_TestCustomerDiscount(CustomerType customerType, int expectedResult)
         {
-            var address = new Address()
-            {
-                Street = "1 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
+            var address = GetAddress();
 
             var checkOutEngine = new CheckOutEngine(new ShippingCalculator(address), _mapper);
 
             var cart = new Cart
             {
-                CustomerType = CustomerType.Standard,
+                CustomerType = customerType,
                 Items = new() { new Item { ProductId = "1", Price = 1, Quantity = 1 } },
                 ShippingAddress = address
             };
 
             var result = checkOutEngine.CalculateTotals(cart);
 
-            Assert.Equal(0, result.CustomerDiscount);
+            Assert.Equal(expectedResult, result.CustomerDiscount);
         }
 
-        [Fact]
-        public void CalculateTotals_StandardCustomerItemCostForOneItemWithQuantityOfTwo_IsFour()
+        [Theory]
+        [MemberData(nameof(TestData))]
+        public void CalculateTotals_TotalItemCostIsCalculatedCorrectly(CustomerType customerType, List<Item> items)
         {
-            var origin = new Address()
-            {
-                Street = "1 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
+            var origin = GetAddress();
 
-            var destination = new Address()
-            {
-                Street = "12 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
+            var destination = GetAddress(street: "12 Main St");
 
             var target = new CheckOutEngine(new ShippingCalculator(origin), _mapper);
 
-            var cart = new Cart
-            {
-                CustomerType = CustomerType.Standard,
-                Items = new() { new Item { ProductId = "1", Price = 2, Quantity = 2 } },
-                ShippingAddress = destination
-            };
+            var cart = CreateCart(customerType, destination, items);
 
             var result = target.CalculateTotals(cart);
 
-            Assert.Equal(4, result.Total - result.ShippingCost);
+            Assert.Equal(GetExpectedTotalCost(items, result.ShippingCost, customerType), result.Total);
         }
 
-        [Fact]
-        public void CalculateTotals_StandardCustomerItemCostForTwoItemsWithQuantityOfTwo_IsEight()
+        // Factory Methods
+        private double GetExpectedTotalCost(List<Item> items, double shippingCost, CustomerType customerType)
         {
-            var origin = new Address()
-            {
-                Street = "1 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
+            var itemCost = items.Sum(item => item.Price * item.Quantity);
 
-            var destination = new Address()
-            {
-                Street = "12 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
+            return (itemCost + shippingCost) * (customerType == CustomerType.Premium ? .9 : 1);
 
-            var target = new CheckOutEngine(new ShippingCalculator(origin), _mapper);
-
-            var cart = new Cart
-            {
-                CustomerType = CustomerType.Standard,
-                Items = new()
-                {
-                    new Item { ProductId = "1", Price = 2, Quantity = 2 },
-                    new Item { ProductId = "2", Price = 2, Quantity = 2 }
-                },
-                ShippingAddress = destination
-            };
-
-            var result = target.CalculateTotals(cart);
-
-            Assert.Equal(8 , result.Total - result.ShippingCost);
         }
 
-        [Fact]
-        public void CalculateTotals_PremiumCustomer_HasCustomerDiscount()
+        private Address GetAddress(string street = "1 Main St", string city = "Anywhere", string country = "USA")
         {
-            var address = new Address { Country = "country", City = "city", Street = "street" };
-
-            var target = new CheckOutEngine(new ShippingCalculator(address), _mapper);
-
-            var cart = new Cart
+            return new Address()
             {
-                CustomerType = CustomerType.Premium,
-                Items = new() { new Item { ProductId = "1", Price = 1, Quantity = 1 } },
-                ShippingAddress = address
+                Street = street,
+                City = city,
+                Country = country
             };
-
-            var result = target.CalculateTotals(cart);
-
-            Assert.NotEqual(0, result.CustomerDiscount);
-        }
-
-        [Fact]
-        public void CalculateTotals_PremiumCustomerItemCostForOneItemWithQuantityOfTwo_HasDiscountApplied()
+        }   
+        
+        private Cart CreateCart(CustomerType customerType, Address shippingAddress, List<Item> items)
         {
-            var origin = new Address()
+            return new Cart
             {
-                Street = "1 Main St",
-                City = "Anywhere",
-                Country = "USA"
+                CustomerType = customerType,
+                Items = items,
+                ShippingAddress = shippingAddress
             };
-
-            var destination = new Address()
-            {
-                Street = "12 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
-
-            var target = new CheckOutEngine(new ShippingCalculator(origin), _mapper);
-
-            var cart = new Cart
-            {
-                CustomerType = CustomerType.Premium,
-                Items = new() { new Item { ProductId = "1", Price = 2, Quantity = 2 } },
-                ShippingAddress = destination
-            };
-
-            var result = target.CalculateTotals(cart);
-
-            Assert.Equal((4 * .9), result.Total - result.ShippingCost);
-        }
-
-        [Fact]
-        public void CalculateTotals_PremiumCustomerItemCostForTwoItemsWithQuantityOfTwo_HasDiscountApplied()
-        {
-            var origin = new Address()
-            {
-                Street = "1 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
-
-            var destination = new Address()
-            {
-                Street = "12 Main St",
-                City = "Anywhere",
-                Country = "USA"
-            };
-
-            var target = new CheckOutEngine(new ShippingCalculator(origin), _mapper);
-
-            var cart = new Cart
-            {
-                CustomerType = CustomerType.Premium,
-                Items = new()
-                {
-                    new Item { ProductId = "1", Price = 2, Quantity = 2 },
-                    new Item { ProductId = "2", Price = 2, Quantity = 2 }
-                },
-                ShippingAddress = destination
-            };
-
-            var result = target.CalculateTotals(cart);
-
-            Assert.Equal((8 * .9), result.Total - result.ShippingCost);
         }
 
     }
+
+
 }

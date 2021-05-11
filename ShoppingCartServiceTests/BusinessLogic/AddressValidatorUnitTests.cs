@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 
-namespace ShoppingCartServiceTests
+namespace ShoppingCartServiceTests.BusinessLogic
 {
     public class AddressValidatorUnitTests
     {

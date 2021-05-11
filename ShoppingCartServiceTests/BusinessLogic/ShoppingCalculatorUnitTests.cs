@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace ShoppingCartServiceTests
+namespace ShoppingCartServiceTests.BusinessLogic
 {
     public class ShoppingCalculatorUnitTests
     {

@@ -1,4 +1,5 @@
-﻿
+﻿using ShoppingCartService.Models;
+
 namespace ShoppingCartServiceTests.Builders
 {
     /// <summary>
